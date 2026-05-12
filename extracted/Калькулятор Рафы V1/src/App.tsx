@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import {
   Printer, Clock, Database,
   Plus, Trash2, X, ChevronDown, Check, Layers,
@@ -182,6 +183,204 @@ function WorkSummaryCard({ totalMinutes, totalCost }: {
         <div className="mt-1 text-xl font-black text-cyan-300">{totalCost.toFixed(0)} ₽</div>
       </div>
     </section>
+/* ======= Circular Dial ======= */
+function CircularDial({ value, maxValue, onChange, label, icon, color, glowColor, unit = 'мин', size = 'md' }: {
+  value: number;
+  maxValue: number;
+  onChange: (v: number) => void;
+  label: string;
+  icon?: React.ReactNode;
+  color: string;
+  glowColor: string;
+  unit?: string;
+  size?: 'sm' | 'md' | 'lg';
+}) {
+  const svgRef = useRef<SVGSVGElement>(null);
+  const isDragging = useRef(false);
+
+  const radius = 40;
+  const strokeWidth = size === 'sm' ? 7 : 6;
+  const center = 50;
+  const circumference = 2 * Math.PI * radius;
+  const safeMaxValue = Math.max(maxValue, 1);
+  const progress = Math.min(value / safeMaxValue, 1);
+  const dashOffset = circumference * (1 - progress);
+  const svgSize = size === 'lg' ? 'w-32 h-32' : size === 'sm' ? 'w-20 h-20' : 'w-28 h-28';
+  const valueFontSize = size === 'sm' ? '14px' : size === 'lg' ? '18px' : '16px';
+  const unitFontSize = size === 'sm' ? '7px' : '8px';
+
+  const angleFromEvent = useCallback((e: MouseEvent | React.MouseEvent) => {
+    const svg = svgRef.current;
+    if (!svg) return null;
+    const rect = svg.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const dx = e.clientX - cx;
+    const dy = e.clientY - cy;
+    let angle = Math.atan2(dy, dx) * (180 / Math.PI) + 90;
+    if (angle < 0) angle += 360;
+    return angle;
+  }, []);
+
+  const updateValue = useCallback((e: MouseEvent | React.MouseEvent) => {
+    const angle = angleFromEvent(e);
+    if (angle === null) return;
+    const newVal = Math.round((angle / 360) * safeMaxValue);
+    onChange(Math.max(0, Math.min(safeMaxValue, newVal)));
+  }, [angleFromEvent, safeMaxValue, onChange]);
+
+  useEffect(() => {
+    const handleMove = (e: MouseEvent) => {
+      if (isDragging.current) {
+        updateValue(e);
+      }
+    };
+    const handleUp = () => {
+      isDragging.current = false;
+    };
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleUp);
+    };
+  }, [updateValue]);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    isDragging.current = true;
+    updateValue(e);
+  };
+
+  // Knob position
+  const knobAngle = (progress * 360 - 90) * (Math.PI / 180);
+  const knobX = center + radius * Math.cos(knobAngle);
+  const knobY = center + radius * Math.sin(knobAngle);
+
+  return (
+    <div className="flex flex-col items-center">
+      <svg
+        ref={svgRef}
+        viewBox="0 0 100 100"
+        className={cn(svgSize, 'cursor-pointer select-none')}
+        onMouseDown={handleMouseDown}
+      >
+        {/* Background glow */}
+        <defs>
+          <filter id={`glow-${label}-${unit}`} x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="3" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+        {/* Background track */}
+        <circle
+          cx={center} cy={center} r={radius}
+          fill="none"
+          stroke="rgba(255,255,255,0.05)"
+          strokeWidth={strokeWidth}
+        />
+        {/* Progress arc */}
+        <circle
+          cx={center} cy={center} r={radius}
+          fill="none"
+          stroke={color}
+          strokeWidth={strokeWidth}
+          strokeDasharray={circumference}
+          strokeDashoffset={dashOffset}
+          strokeLinecap="round"
+          transform={`rotate(-90 ${center} ${center})`}
+          filter={`url(#glow-${label}-${unit})`}
+          className="transition-all duration-100"
+        />
+        {/* Knob */}
+        {value > 0 && (
+          <circle
+            cx={knobX} cy={knobY} r={size === 'sm' ? 3.5 : 4}
+            fill="white"
+            stroke={color}
+            strokeWidth={2}
+            className="drop-shadow-lg"
+          />
+        )}
+        {/* Center text */}
+        <text x={center} y={center - 4} textAnchor="middle" className="fill-white font-black" style={{ fontSize: valueFontSize }}>
+          {value}
+        </text>
+        <text x={center} y={center + 10} textAnchor="middle" className="fill-gray-500" style={{ fontSize: unitFontSize }}>
+          {unit}
+        </text>
+      </svg>
+      <div className="flex items-center gap-1.5 mt-1.5">
+        {icon}
+        <span className="text-xs font-semibold" style={{ color: glowColor }}>{label}</span>
+      </div>
+      {/* +/- buttons */}
+      <div className="flex items-center gap-1 mt-1.5">
+        <button
+          onClick={() => onChange(Math.max(0, value - 1))}
+          className="w-6 h-6 rounded-full bg-white/5 border border-white/10 text-gray-400 hover:bg-white/10 hover:text-white flex items-center justify-center text-sm font-bold transition-all"
+        >
+          −
+        </button>
+        <button
+          onClick={() => onChange(Math.min(safeMaxValue, value + 1))}
+          className="w-6 h-6 rounded-full bg-white/5 border border-white/10 text-gray-400 hover:bg-white/10 hover:text-white flex items-center justify-center text-sm font-bold transition-all"
+        >
+          +
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function TimeDialGroup({ label, totalMinutes, onChange, icon, color, glowColor }: {
+  label: string;
+  totalMinutes: number;
+  onChange: (minutes: number) => void;
+  icon: React.ReactNode;
+  color: string;
+  glowColor: string;
+}) {
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  const setHours = (nextHours: number) => onChange(nextHours * 60 + minutes);
+  const setMinutes = (nextMinutes: number) => onChange(hours * 60 + nextMinutes);
+  const costRub = (totalMinutes / 60) * 1000;
+
+  return (
+    <div className="rounded-2xl bg-white/[0.03] border border-white/5 p-3">
+      <div className="flex items-center justify-center gap-2 mb-2">
+        {icon}
+        <span className="text-xs font-bold text-gray-300">{label}</span>
+      </div>
+      <div className="flex items-end justify-center gap-2">
+        <CircularDial
+          value={hours}
+          maxValue={12}
+          onChange={setHours}
+          label="Часы"
+          color={color}
+          glowColor={glowColor}
+          unit="ч"
+          size="lg"
+        />
+        <CircularDial
+          value={minutes}
+          maxValue={59}
+          onChange={setMinutes}
+          label="Минуты"
+          color={color}
+          glowColor={glowColor}
+          unit="мин"
+          size="sm"
+        />
+      </div>
+      <div className="mt-2 text-center text-[11px]" style={{ color: glowColor }}>
+        {hours} ч {minutes} мин · {costRub.toFixed(0)} ₽
+      </div>
+    </div>
   );
 }
 
@@ -483,6 +682,7 @@ export function App() {
 
         {/* ====== MAIN CONTROLS ====== */}
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
           {/* FORMAT */}
           <div className="rounded-2xl bg-[#161822] border border-white/5 p-5 space-y-4">
@@ -646,6 +846,9 @@ export function App() {
           {/* PROFITABILITY */}
           <div className="min-w-0 rounded-2xl bg-[#161822] border border-white/5 p-5 space-y-5 overflow-hidden xl:col-span-3">
             <div className="flex flex-wrap items-center gap-2">
+          {/* PROFITABILITY + CIRCULAR DIALS */}
+          <div className="rounded-2xl bg-[#161822] border border-white/5 p-5 space-y-4">
+            <div className="flex items-center gap-2">
               <div className="p-1.5 rounded-lg bg-cyan-500/10">
                 <Scissors size={15} className="text-cyan-400" />
               </div>
@@ -653,6 +856,7 @@ export function App() {
               <span className="ml-auto text-3xl font-black bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">{profitPercent}%</span>
             </div>
             <div>
+            <div className="pt-2">
               <div className="relative h-3 bg-white/5 rounded-full overflow-hidden">
                 <div
                   className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-cyan-500 via-indigo-500 to-purple-500 transition-all duration-150"
@@ -668,6 +872,9 @@ export function App() {
                 className="w-full relative z-10 opacity-0 cursor-pointer h-6"
               />
               <div className="flex justify-between text-[10px] text-gray-600">
+                className="w-full -mt-3 relative z-10 opacity-0 cursor-pointer h-6"
+              />
+              <div className="flex justify-between text-[10px] text-gray-600 -mt-1">
                 <span>0%</span>
                 <span>25%</span>
                 <span>55%</span>
@@ -703,6 +910,31 @@ export function App() {
               <WorkSummaryCard
                 totalMinutes={calcs.totalWorkMinutes}
                 totalCost={calcs.workCost}
+            {/* Circular dials for work time */}
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 pt-2">
+              <TimeDialGroup
+                totalMinutes={printingTime}
+                onChange={setPrintingTime}
+                label="Печать"
+                icon={<Printer size={13} className="text-amber-400" />}
+                color="#f59e0b"
+                glowColor="#f59e0b"
+              />
+              <TimeDialGroup
+                totalMinutes={cuttingTime}
+                onChange={setCuttingTime}
+                label="Резка"
+                icon={<Scissors size={13} className="text-rose-400" />}
+                color="#f43f5e"
+                glowColor="#f43f5e"
+              />
+              <TimeDialGroup
+                totalMinutes={laminationTime}
+                onChange={setLaminationTime}
+                label="Ламинация"
+                icon={<Layers size={13} className="text-purple-400" />}
+                color="#a855f7"
+                glowColor="#a855f7"
               />
             </div>
           </div>
