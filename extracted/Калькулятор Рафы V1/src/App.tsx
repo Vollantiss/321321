@@ -45,6 +45,7 @@ function Modal({ open, onClose, title, children }: {
 
 /* ======= Circular Dial ======= */
 function CircularDial({ value, maxValue, onChange, label, color, glowColor, unit, variant }: {
+function CircularDial({ value, maxValue, onChange, label, icon, color, glowColor, unit = 'мин', size = 'md' }: {
   value: number;
   maxValue: number;
   onChange: (v: number) => void;
@@ -53,6 +54,11 @@ function CircularDial({ value, maxValue, onChange, label, color, glowColor, unit
   glowColor: string;
   unit: string;
   variant: 'hours' | 'minutes';
+  icon?: React.ReactNode;
+  color: string;
+  glowColor: string;
+  unit?: string;
+  size?: 'sm' | 'md' | 'lg';
 }) {
   const svgRef = useRef<SVGSVGElement>(null);
   const isDragging = useRef(false);
@@ -66,6 +72,16 @@ function CircularDial({ value, maxValue, onChange, label, color, glowColor, unit
   const progress = Math.min(clampedValue / safeMaxValue, 1);
   const dashOffset = circumference * (1 - progress);
   const isHourDial = variant === 'hours';
+  const radius = 40;
+  const strokeWidth = size === 'sm' ? 7 : 6;
+  const center = 50;
+  const circumference = 2 * Math.PI * radius;
+  const safeMaxValue = Math.max(maxValue, 1);
+  const progress = Math.min(value / safeMaxValue, 1);
+  const dashOffset = circumference * (1 - progress);
+  const svgSize = size === 'lg' ? 'w-32 h-32' : size === 'sm' ? 'w-20 h-20' : 'w-28 h-28';
+  const valueFontSize = size === 'sm' ? '14px' : size === 'lg' ? '18px' : '16px';
+  const unitFontSize = size === 'sm' ? '7px' : '8px';
 
   const angleFromEvent = useCallback((e: MouseEvent | React.MouseEvent) => {
     const svg = svgRef.current;
@@ -90,6 +106,9 @@ function CircularDial({ value, maxValue, onChange, label, color, glowColor, unit
   useEffect(() => {
     const handleMove = (e: MouseEvent) => {
       if (isDragging.current) updateValue(e);
+      if (isDragging.current) {
+        updateValue(e);
+      }
     };
     const handleUp = () => {
       isDragging.current = false;
@@ -107,6 +126,7 @@ function CircularDial({ value, maxValue, onChange, label, color, glowColor, unit
     updateValue(e);
   };
 
+  // Knob position
   const knobAngle = (progress * 360 - 90) * (Math.PI / 180);
   const knobX = center + radius * Math.cos(knobAngle);
   const knobY = center + radius * Math.sin(knobAngle);
@@ -127,6 +147,17 @@ function CircularDial({ value, maxValue, onChange, label, color, glowColor, unit
         <defs>
           <filter id={`glow-${label}-${unit}-${variant}`} x="-20%" y="-20%" width="140%" height="140%">
             <feGaussianBlur stdDeviation="1.6" result="blur" />
+    <div className="flex flex-col items-center">
+      <svg
+        ref={svgRef}
+        viewBox="0 0 100 100"
+        className={cn(svgSize, 'cursor-pointer select-none')}
+        onMouseDown={handleMouseDown}
+      >
+        {/* Background glow */}
+        <defs>
+          <filter id={`glow-${label}-${unit}`} x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="3" result="blur" />
             <feMerge>
               <feMergeNode in="blur" />
               <feMergeNode in="SourceGraphic" />
@@ -139,6 +170,14 @@ function CircularDial({ value, maxValue, onChange, label, color, glowColor, unit
           stroke="rgba(255,255,255,0.08)"
           strokeWidth={strokeWidth}
         />
+        {/* Background track */}
+        <circle
+          cx={center} cy={center} r={radius}
+          fill="none"
+          stroke="rgba(255,255,255,0.05)"
+          strokeWidth={strokeWidth}
+        />
+        {/* Progress arc */}
         <circle
           cx={center} cy={center} r={radius}
           fill="none"
@@ -187,6 +226,45 @@ function CircularDial({ value, maxValue, onChange, label, color, glowColor, unit
             +
           </button>
         </div>
+          filter={`url(#glow-${label}-${unit})`}
+          className="transition-all duration-100"
+        />
+        {/* Knob */}
+        {value > 0 && (
+          <circle
+            cx={knobX} cy={knobY} r={size === 'sm' ? 3.5 : 4}
+            fill="white"
+            stroke={color}
+            strokeWidth={2}
+            className="drop-shadow-lg"
+          />
+        )}
+        {/* Center text */}
+        <text x={center} y={center - 4} textAnchor="middle" className="fill-white font-black" style={{ fontSize: valueFontSize }}>
+          {value}
+        </text>
+        <text x={center} y={center + 10} textAnchor="middle" className="fill-gray-500" style={{ fontSize: unitFontSize }}>
+          {unit}
+        </text>
+      </svg>
+      <div className="flex items-center gap-1.5 mt-1.5">
+        {icon}
+        <span className="text-xs font-semibold" style={{ color: glowColor }}>{label}</span>
+      </div>
+      {/* +/- buttons */}
+      <div className="flex items-center gap-1 mt-1.5">
+        <button
+          onClick={() => onChange(Math.max(0, value - 1))}
+          className="w-6 h-6 rounded-full bg-white/5 border border-white/10 text-gray-400 hover:bg-white/10 hover:text-white flex items-center justify-center text-sm font-bold transition-all"
+        >
+          −
+        </button>
+        <button
+          onClick={() => onChange(Math.min(safeMaxValue, value + 1))}
+          className="w-6 h-6 rounded-full bg-white/5 border border-white/10 text-gray-400 hover:bg-white/10 hover:text-white flex items-center justify-center text-sm font-bold transition-all"
+        >
+          +
+        </button>
       </div>
     </div>
   );
@@ -542,6 +620,7 @@ export function App() {
 
         {/* ====== MAIN CONTROLS ====== */}
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
           {/* FORMAT */}
           <div className="rounded-2xl bg-[#161822] border border-white/5 p-5 space-y-4">
@@ -705,6 +784,8 @@ export function App() {
           {/* PROFITABILITY + CIRCULAR DIALS */}
           <div className="min-w-0 rounded-2xl bg-[#161822] border border-white/5 p-5 space-y-5 overflow-hidden xl:col-span-3 2xl:col-span-1">
             <div className="flex flex-wrap items-center gap-2">
+          <div className="rounded-2xl bg-[#161822] border border-white/5 p-5 space-y-4">
+            <div className="flex items-center gap-2">
               <div className="p-1.5 rounded-lg bg-cyan-500/10">
                 <Scissors size={15} className="text-cyan-400" />
               </div>
@@ -712,6 +793,7 @@ export function App() {
               <span className="ml-auto text-3xl font-black bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">{profitPercent}%</span>
             </div>
             <div>
+            <div className="pt-2">
               <div className="relative h-3 bg-white/5 rounded-full overflow-hidden">
                 <div
                   className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-cyan-500 via-indigo-500 to-purple-500 transition-all duration-150"
@@ -727,6 +809,9 @@ export function App() {
                 className="w-full relative z-10 opacity-0 cursor-pointer h-6"
               />
               <div className="flex justify-between text-[10px] text-gray-600">
+                className="w-full -mt-3 relative z-10 opacity-0 cursor-pointer h-6"
+              />
+              <div className="flex justify-between text-[10px] text-gray-600 -mt-1">
                 <span>0%</span>
                 <span>25%</span>
                 <span>55%</span>
@@ -738,6 +823,7 @@ export function App() {
 
             {/* Circular dials for work time */}
             <div className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-3 2xl:grid-cols-1">
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 pt-2">
               <TimeDialGroup
                 totalMinutes={printingTime}
                 onChange={setPrintingTime}
