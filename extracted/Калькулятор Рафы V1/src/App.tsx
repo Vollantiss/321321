@@ -1,3 +1,4 @@
+import { useState, useCallback, useMemo } from 'react';
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import {
   Printer, Clock, Database,
@@ -43,6 +44,145 @@ function Modal({ open, onClose, title, children }: {
   );
 }
 
+/* ======= Profitability time controls ======= */
+const MAX_WORK_MINUTES = 12 * 60 + 59;
+
+function clampWorkMinutes(minutes: number): number {
+  return Math.max(0, Math.min(MAX_WORK_MINUTES, minutes));
+}
+
+function TimeControlCard({ label, totalMinutes, onChange, icon, accentColor }: {
+  label: string;
+  totalMinutes: number;
+  onChange: (minutes: number) => void;
+  icon: React.ReactNode;
+  accentColor: string;
+}) {
+  const normalizedMinutes = clampWorkMinutes(totalMinutes);
+  const hours = Math.floor(normalizedMinutes / 60);
+  const minutes = normalizedMinutes % 60;
+  const costRub = (normalizedMinutes / 60) * 1000;
+
+  const changeTime = (deltaMinutes: number) => {
+    onChange(clampWorkMinutes(normalizedMinutes + deltaMinutes));
+  };
+
+  return (
+    <section className="relative isolate flex min-h-64 min-w-0 flex-col justify-between overflow-hidden rounded-2xl border border-white/5 bg-white/[0.035] p-4 shadow-inner shadow-white/[0.02]">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-6 top-10 -z-10 h-24 rounded-full opacity-20 blur-3xl"
+        style={{ backgroundColor: accentColor }}
+      />
+
+      <div className="flex min-w-0 items-center justify-center gap-2">
+        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-black/20" style={{ color: accentColor }}>
+          {icon}
+        </span>
+        <h4 className="truncate text-sm font-bold text-gray-100">{label}</h4>
+      </div>
+
+      <div className="flex flex-1 flex-col items-center justify-center py-5 text-center">
+        <div className="flex items-end justify-center gap-2 leading-none">
+          <span className="text-5xl font-black tracking-tight text-white">{hours}</span>
+          <span className="pb-1 text-sm font-bold" style={{ color: accentColor }}>ч</span>
+          <span className="text-5xl font-black tracking-tight text-white">{minutes.toString().padStart(2, '0')}</span>
+          <span className="pb-1 text-sm font-bold" style={{ color: accentColor }}>мин</span>
+        </div>
+        <div className="mt-3 text-xs font-medium text-gray-500">Время работы</div>
+      </div>
+
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-2">
+          <div className="rounded-xl bg-black/15 p-2">
+            <div className="mb-1 text-center text-[10px] font-bold uppercase tracking-wide text-gray-500">Часы</div>
+            <div className="flex items-center justify-center gap-2">
+              <button
+                type="button"
+                onClick={() => changeTime(-60)}
+                className="grid h-8 w-8 place-items-center rounded-full border border-white/10 bg-white/5 text-gray-300 transition hover:bg-white/10 hover:text-white"
+                aria-label={`Уменьшить часы для ${label}`}
+              >
+                −
+              </button>
+              <button
+                type="button"
+                onClick={() => changeTime(60)}
+                className="grid h-8 w-8 place-items-center rounded-full border border-white/10 bg-white/5 text-gray-300 transition hover:bg-white/10 hover:text-white"
+                aria-label={`Увеличить часы для ${label}`}
+              >
+                +
+              </button>
+            </div>
+          </div>
+
+          <div className="rounded-xl bg-black/15 p-2">
+            <div className="mb-1 text-center text-[10px] font-bold uppercase tracking-wide text-gray-500">Минуты</div>
+            <div className="flex items-center justify-center gap-2">
+              <button
+                type="button"
+                onClick={() => changeTime(-1)}
+                className="grid h-8 w-8 place-items-center rounded-full border border-white/10 bg-white/5 text-gray-300 transition hover:bg-white/10 hover:text-white"
+                aria-label={`Уменьшить минуты для ${label}`}
+              >
+                −
+              </button>
+              <button
+                type="button"
+                onClick={() => changeTime(1)}
+                className="grid h-8 w-8 place-items-center rounded-full border border-white/10 bg-white/5 text-gray-300 transition hover:bg-white/10 hover:text-white"
+                aria-label={`Увеличить минуты для ${label}`}
+              >
+                +
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-xl bg-black/20 px-3 py-2 text-center text-xs font-bold" style={{ color: accentColor }}>
+          {costRub.toFixed(0)} ₽
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function WorkSummaryCard({ totalMinutes, totalCost }: {
+  totalMinutes: number;
+  totalCost: number;
+}) {
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  return (
+    <section className="relative isolate flex min-h-64 min-w-0 flex-col justify-between overflow-hidden rounded-2xl border border-cyan-400/10 bg-cyan-400/[0.04] p-4 shadow-inner shadow-cyan-400/[0.03]">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-6 top-10 -z-10 h-24 rounded-full bg-cyan-400 opacity-20 blur-3xl"
+      />
+
+      <div className="flex min-w-0 items-center justify-center gap-2">
+        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-cyan-400/10 text-cyan-300">
+          <Clock size={16} />
+        </span>
+        <h4 className="truncate text-sm font-bold text-gray-100">Итого работа</h4>
+      </div>
+
+      <div className="flex flex-1 flex-col items-center justify-center py-5 text-center">
+        <div className="flex items-end justify-center gap-2 leading-none">
+          <span className="text-5xl font-black tracking-tight text-white">{hours}</span>
+          <span className="pb-1 text-sm font-bold text-cyan-300">ч</span>
+          <span className="text-5xl font-black tracking-tight text-white">{minutes.toString().padStart(2, '0')}</span>
+          <span className="pb-1 text-sm font-bold text-cyan-300">мин</span>
+        </div>
+        <div className="mt-3 text-xs font-medium text-gray-500">Общее время</div>
+      </div>
+
+      <div className="rounded-xl bg-black/20 px-3 py-3 text-center">
+        <div className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Стоимость работы</div>
+        <div className="mt-1 text-xl font-black text-cyan-300">{totalCost.toFixed(0)} ₽</div>
+      </div>
+    </section>
 /* ======= Circular Dial ======= */
 function CircularDial({ value, maxValue, onChange, label, icon, color, glowColor, unit = 'мин', size = 'md' }: {
   value: number;
@@ -541,6 +681,7 @@ export function App() {
         </div>
 
         {/* ====== MAIN CONTROLS ====== */}
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
           {/* FORMAT */}
@@ -702,6 +843,9 @@ export function App() {
             </div>
           </div>
 
+          {/* PROFITABILITY */}
+          <div className="min-w-0 rounded-2xl bg-[#161822] border border-white/5 p-5 space-y-5 overflow-hidden xl:col-span-3">
+            <div className="flex flex-wrap items-center gap-2">
           {/* PROFITABILITY + CIRCULAR DIALS */}
           <div className="rounded-2xl bg-[#161822] border border-white/5 p-5 space-y-4">
             <div className="flex items-center gap-2">
@@ -711,6 +855,7 @@ export function App() {
               <h3 className="font-bold text-sm text-gray-200">Рентабельность</h3>
               <span className="ml-auto text-3xl font-black bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">{profitPercent}%</span>
             </div>
+            <div>
             <div className="pt-2">
               <div className="relative h-3 bg-white/5 rounded-full overflow-hidden">
                 <div
@@ -724,6 +869,9 @@ export function App() {
                 max={150}
                 value={profitPercent}
                 onChange={e => setProfitPercent(Number(e.target.value))}
+                className="w-full relative z-10 opacity-0 cursor-pointer h-6"
+              />
+              <div className="flex justify-between text-[10px] text-gray-600">
                 className="w-full -mt-3 relative z-10 opacity-0 cursor-pointer h-6"
               />
               <div className="flex justify-between text-[10px] text-gray-600 -mt-1">
@@ -736,6 +884,32 @@ export function App() {
               </div>
             </div>
 
+            {/* Work time cards */}
+            <div className="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <TimeControlCard
+                totalMinutes={printingTime}
+                onChange={setPrintingTime}
+                label="Печать"
+                icon={<Printer size={16} />}
+                accentColor="#f59e0b"
+              />
+              <TimeControlCard
+                totalMinutes={cuttingTime}
+                onChange={setCuttingTime}
+                label="Резка"
+                icon={<Scissors size={16} />}
+                accentColor="#f43f5e"
+              />
+              <TimeControlCard
+                totalMinutes={laminationTime}
+                onChange={setLaminationTime}
+                label="Ламинация"
+                icon={<Layers size={16} />}
+                accentColor="#a855f7"
+              />
+              <WorkSummaryCard
+                totalMinutes={calcs.totalWorkMinutes}
+                totalCost={calcs.workCost}
             {/* Circular dials for work time */}
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 pt-2">
               <TimeDialGroup
